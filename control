@@ -1,0 +1,9 @@
+Package: com.knight914.memtrimball
+Name: MemTrimBall
+Version: 0.0.1
+Architecture: iphoneos-arm64
+Description: Optional SpringBoard overlay requesting MemTrim actions. Source-only, uncompiled and untested.
+Maintainer: knight914
+Author: knight914
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader, com.crctdd.memtrim, firmware (>= 15.0), firmware (<< 18.0)
