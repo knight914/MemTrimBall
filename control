@@ -1,6 +1,6 @@
 Package: com.knight914.memtrimball
 Name: MemTrimBall
-Version: 0.0.2
+Version: 0.0.3
 Architecture: iphoneos-arm64
 Description: Optional SpringBoard overlay requesting MemTrim actions. Source-only, uncompiled and untested.
 Maintainer: knight914

@@ -124,7 +124,17 @@ static BOOL MTBReadUILocked(BOOL *locked) {
     UIApplication *app = UIApplication.sharedApplication;
     // Covers injection after didFinishLaunching; never infer readiness from our own window.
     BOOL hasSystemWindow = NO;
-    for (UIWindow *window in app.windows) {
+    NSMutableArray<UIWindow *> *windows = [NSMutableArray array];
+    for (UIScene *scene in app.connectedScenes) {
+        if ([scene isKindOfClass:UIWindowScene.class])
+            [windows addObjectsFromArray:((UIWindowScene *)scene).windows];
+    }
+    // SpringBoard can still own legacy non-scene windows on iOS 15/16.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    if (windows.count == 0) [windows addObjectsFromArray:app.windows];
+#pragma clang diagnostic pop
+    for (UIWindow *window in windows) {
         if (![window isKindOfClass:MTBOverlayWindow.class]) { hasSystemWindow = YES; break; }
     }
     if (app.delegate && app.applicationState == UIApplicationStateActive && hasSystemWindow) self.ready = YES;

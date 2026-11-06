@@ -1,1 +1,1 @@
-{"version": "0.0.2", "attempt": 2, "previous_run": 42168686287, "reason": "Unsupported macos-14 runner; use documented standard macos-15-intel"}
+{"version": "0.0.3", "attempt": 3, "previous_run": 42169916344, "reason": "Fix deprecated UIWindow enumeration"}
