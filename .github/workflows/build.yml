@@ -1,0 +1,75 @@
+name: Build MemTrimBall
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: memtrimball-build
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: rootless
+            repository: theos/theos
+            revision: 6e7b8c40e0f5f9f5b2377800dc1e42cd2560d24a
+          - environment: roothide
+            repository: roothide/theos
+            revision: 3ac89c984ec652fd16bcd91b33ae16de45ce76fa
+    env:
+      THEOS: ${{ github.workspace }}/toolchains/${{ matrix.environment }}
+      THEOS_PACKAGE_SCHEME: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Reserve immutable build attempt
+        run: |
+          test "$GITHUB_RUN_ATTEMPT" = 1 || { echo 'New compilation requires new VERSION and dispatch'; exit 1; }
+          test "$(cat VERSION)" = "$(python3 -c 'import json; print(json.load(open("build-attempt.json"))["version"])')"
+      - uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        id: reservation
+        with:
+          path: build-attempt.json
+          key: memtrimball-version-${{ hashFiles('VERSION') }}
+      - name: Reject previously compiled version
+        run: test '${{ steps.reservation.outputs.cache-hit }}' != true
+      - uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
+        if: matrix.environment == 'rootless'
+        with:
+          path: build-attempt.json
+          key: memtrimball-version-${{ hashFiles('VERSION') }}
+      - name: Prepare official independent toolchain
+        run: |
+          brew install make ldid dpkg
+          git clone https://github.com/${{ matrix.repository }} "$THEOS"
+          git -C "$THEOS" checkout '${{ matrix.revision }}'
+          git -C "$THEOS" submodule update --init --recursive
+          mkdir -p "$THEOS/sdks"
+          ln -s "$(xcrun --sdk iphoneos --show-sdk-path)" "$THEOS/sdks/iPhoneOS$(xcrun --sdk iphoneos --show-sdk-version).sdk"
+          mkdir -p dist/${{ matrix.environment }}
+          { xcodebuild -version; xcrun --sdk iphoneos --show-sdk-version; git -C "$THEOS" rev-parse HEAD; git -C "$THEOS" submodule status --recursive; } > dist/${{ matrix.environment }}/toolchain.txt
+          echo 'int mtb_probe(void) { return 0; }' > /tmp/mtb-probe.c
+          xcrun --sdk iphoneos clang -arch arm64e -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" -miphoneos-version-min=15.0 -c /tmp/mtb-probe.c -o /tmp/mtb-probe.o
+          xcrun lipo -info /tmp/mtb-probe.o >> dist/${{ matrix.environment }}/toolchain.txt
+      - name: Build and inspect
+        run: |
+          export PATH="$(brew --prefix make)/libexec/gnubin:$PATH"
+          make clean package FINALPACKAGE=1
+          cp packages/*.deb dist/${{ matrix.environment }}/
+          for deb in packages/*.deb; do
+            dpkg-deb -I "$deb"
+            dpkg-deb -c "$deb"
+            dpkg-deb -x "$deb" /tmp/mtb-package
+          done
+          for dylib in $(find /tmp/mtb-package -name '*.dylib'); do
+            xcrun lipo -info "$dylib"
+            xcrun otool -L "$dylib"
+          done > dist/${{ matrix.environment }}/binary-inspection.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: MemTrimBall-${{ matrix.environment }}-${{ github.run_id }}
+          path: dist/${{ matrix.environment }}/
+          if-no-files-found: error
+          retention-days: 7
